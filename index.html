@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ur">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#0f766e">
+<title>Pharmacy Manager</title>
+<style>
+:root{--p:#0f766e;--pd:#115e59;--bg:#f1f5f4;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--red:#dc2626;--org:#d97706;--grn:#16a34a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:72px}
+header{background:var(--p);color:#fff;padding:14px 16px;font-weight:700;font-size:18px;position:sticky;top:0;z-index:5}
+main{padding:12px;max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bd);display:flex;z-index:6}
+nav button{flex:1;border:0;background:none;padding:10px 0 8px;font-size:12px;color:var(--mu)}
+nav button b{display:block;font-size:20px;font-weight:400}
+nav button.on{color:var(--p);font-weight:700}
+input,select,textarea{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;font-size:16px;background:#fff;font-family:inherit}
+label{font-size:13px;color:var(--mu);display:block;margin:10px 0 4px}
+.row{display:flex;gap:8px;align-items:center}
+.btn{border:0;background:var(--p);color:#fff;padding:11px 14px;border-radius:10px;font-size:15px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--p);border:1px solid var(--p)}
+.btn.red{background:var(--red)}
+.btn.sm{padding:6px 10px;font-size:13px}
+.full{width:100%;margin-top:8px}
+.card{background:var(--card);border-radius:12px;padding:12px;margin:8px 0;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.item{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.item .n{font-weight:600}
+.mu{color:var(--mu);font-size:13px}
+.tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:20px;background:#e2e8f0;margin-left:4px}
+.tag.r{background:#fee2e2;color:var(--red)}.tag.o{background:#fef3c7;color:var(--org)}.tag.g{background:#dcfce7;color:var(--grn)}
+h3{margin:16px 4px 4px;font-size:15px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:#fff;border-radius:12px;padding:12px;text-align:center}
+.stat b{display:block;font-size:20px;color:var(--p)}
+.stat span{font-size:12px;color:var(--mu)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin:8px 0}
+.chip{border:1px solid var(--bd);background:#fff;border-radius:20px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.chip.on{background:var(--p);color:#fff;border-color:var(--p)}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:32px;height:32px;border-radius:8px;border:1px solid var(--bd);background:#fff;font-size:18px}
+#modal,#scan{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:20;align-items:flex-end;justify-content:center}
+#modal.on,#scan.on{display:flex}
+#modal .box{background:#fff;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px}
+#scan{background:#000;flex-direction:column;align-items:stretch;justify-content:flex-start;z-index:30}
+#scan video{width:100%;flex:1;min-height:0;object-fit:cover}
+#scan .bar{background:#111;color:#fff;padding:12px}
+#toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;display:none;max-width:90%}
+.big{font-size:22px;font-weight:700}
+.kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:14px}
+</style>
+</head>
+<body>
+<header>💊 Pharmacy Manager</header>
+<main id="app"></main>
+<nav>
+  <button data-t="sale"><b>🛒</b>Sale</button>
+  <button data-t="stock"><b>📦</b>Dawaiyan</button>
+  <button data-t="report"><b>📊</b>Hisaab</button>
+  <button data-t="more"><b>⚙️</b>Backup</button>
+</nav>
+<div id="modal"><div class="box" id="mbox"></div></div>
+<div id="scan">
+  <video id="vid" playsinline muted></video>
+  <div class="bar">
+    <div id="scanMsg" style="margin-bottom:8px;font-size:14px"></div>
+    <div class="row">
+      <input id="manual" placeholder="Code yahan type karein">
+      <button class="btn" id="manualGo">OK</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost" style="flex:1" id="photoBtn">📸 Photo se scan</button>
+      <button class="btn red" style="flex:1" id="scanClose">Band</button>
+    </div>
+    <input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ---------- data ---------- */
+const KEY='pharma_v1';
+let S={meds:[],sales:[]};
+try{const d=JSON.parse(localStorage.getItem(KEY));if(d)S=d}catch(e){}
+S.meds=S.meds||[];S.sales=S.sales||[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rs=n=>'Rs '+(Math.round((+n||0)*100)/100).toLocaleString('en-US');
+const pad=n=>String(n).padStart(2,'0');
+const dkey=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const mkey=t=>dkey(t).slice(0,7);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){toast('Save nahi hua! Storage full hai, backup lein');return false}};
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2600)}
+let tab='sale',cart=[],stockFilter='all',stockQ='',period='today';
+
+/* ---------- helpers ---------- */
+function norm(c){return String(c||'').replace(/\s+/g,'')}
+function findByCode(code){
+  const c=norm(code);if(!c)return null;
+  let m=S.meds.find(x=>norm(x.barcode)===c);if(m)return m;
+  const nz=s=>s.replace(/^0+/,'');
+  m=S.meds.find(x=>x.barcode&&/^\d+$/.test(norm(x.barcode))&&/^\d+$/.test(c)&&nz(norm(x.barcode))===nz(c));if(m)return m;
+  // GS1 / QR text jis mein barcode shamil ho
+  return S.meds.find(x=>x.barcode&&norm(x.barcode).length>=6&&c.includes(norm(x.barcode)))||null;
+}
+function expState(m){
+  if(!m.expiry)return'';
+  const [y,mo]=m.expiry.split('-').map(Number);if(!y)return'';
+  const end=new Date(y,mo,0,23,59,59),days=(end-Date.now())/864e5;
+  return days<0?'exp':days<90?'soon':'';
+}
+function expTag(m){const s=expState(m);return s==='exp'?'<span class="tag r">Expire</span>':s==='soon'?'<span class="tag o">Expiry qareeb</span>':''}
+function stockTag(m){return m.qty<=0?'<span class="tag r">Khatam</span>':m.qty<=(+m.minq||5)?'<span class="tag o">Kam stock</span>':''}
+
+/* ---------- navigation ---------- */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  ({sale:viewSale,stock:viewStock,report:viewReport,more:viewMore})[tab]();
+  window.scrollTo(0,0);
+}
+
+/* ---------- modal ---------- */
+function modal(h){$('#mbox').innerHTML=h;$('#modal').classList.add('on')}
+function closeModal(){$('#modal').classList.remove('on')}
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+
+/* ---------- scanner ---------- */
+let scanStream=null,scanTimer=null,scanCb=null,det=null;
+function getDet(){if(!det&&'BarcodeDetector' in window){try{det=new BarcodeDetector()}catch(e){}}return det}
+async function openScanner(cb){
+  if(window.Android&&Android.scan){scanCb=cb;Android.scan();return}
+  scanCb=cb;$('#scan').classList.add('on');$('#manual').value='';
+  $('#scanMsg').textContent='Camera khul raha hai...';
+  try{
+    scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    const v=$('#vid');v.srcObject=scanStream;await v.play();
+    if(!getDet()){$('#scanMsg').textContent='Is browser mein auto-scan nahi. Chrome use karein, ya code type karein.';return}
+    $('#scanMsg').textContent='Barcode / QR ko frame ke beech mein rakhein';
+    scanTimer=setInterval(async()=>{try{const r=await det.detect(v);if(r.length)scanDone(r[0].rawValue)}catch(e){}},300);
+  }catch(e){$('#scanMsg').textContent='Camera nahi khula. "Photo se scan" ya code type karein.'}
+}
+function scanDone(code){const cb=scanCb;closeScanner();if(cb)cb(code)}
+function closeScanner(){clearInterval(scanTimer);if(scanStream)scanStream.getTracks().forEach(t=>t.stop());scanStream=null;scanCb=cb=null;$('#vid').srcObject=null;$('#scan').classList.remove('on')}
+var cb=null;
+window.__scanResult=code=>{const f=scanCb;scanCb=null;if(f)f(code)};
+window.__back=()=>{if($('#modal').classList.contains('on')){closeModal();return true}return false};
+$('#scanClose').onclick=closeScanner;
+$('#manualGo').onclick=()=>{const v=$('#manual').value.trim();if(v)scanDone(v)};
+$('#manual').addEventListener('keydown',e=>{if(e.key==='Enter')$('#manualGo').click()});
+$('#photoBtn').onclick=()=>$('#photoIn').click();
+$('#photoIn').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!getDet()){$('#scanMsg').textContent='Is browser mein scan support nahi. Code type karein.';return}
+  try{const bm=await createImageBitmap(f);const r=await det.detect(bm);
+    if(r.length)scanDone(r[0].rawValue);else $('#scanMsg').textContent='Photo mein code nahi mila, dobara koshish karein.'}
+  catch(err){$('#scanMsg').textContent='Photo parh nahi saka.'}
+};
+
+/* ---------- SALE ---------- */
+function viewSale(){
+  $('#app').innerHTML=`
+  <div class="row"><input id="q" placeholder="Dawai ka naam / barcode likhein" autocomplete="off"><button class="btn" id="scanCart">📷</button></div>
+  <button class="btn ghost full" id="scanInfo">ℹ️ Dawai scan karke maloomat aur rate dekhein</button>
+  <div id="results"></div>
+  <h3>🛒 Cart</h3><div id="cart"></div>`;
+  $('#q').oninput=renderResults;
+  $('#q').onkeydown=e=>{if(e.key==='Enter'){const v=$('#q').value.trim();const m=findByCode(v);if(m){addToCart(m.id);$('#q').value='';renderResults()}}};
+  $('#scanCart').onclick=()=>openScanner(code=>{const m=findByCode(code);m?addToCart(m.id):notFound(code)});
+  $('#scanInfo').onclick=()=>openScanner(code=>{const m=findByCode(code);m?showInfo(m.id):notFound(code)});
+  renderResults();renderCart();
+}
+function notFound(code){
+  modal(`<div class="big">Dawai nahi mili</div><p class="mu">Code: ${esc(code)}</p><p>Ye dawai list mein nahi hai. Nayi add karein?</p>
+  <button class="btn full" onclick="medForm(null,'${esc(code).replace(/'/g,'')}')">➕ Nayi dawai add karein</button>
+  <button class="btn ghost full" onclick="closeModal()">Nahi</button>`);
+}
+function renderResults(){
+  const q=($('#q')?.value||'').trim().toLowerCase();const el=$('#results');if(!el)return;
+  if(!q){el.innerHTML='';return}
+  const r=S.meds.filter(m=>(m.name+' '+(m.company||'')+' '+(m.formula||'')+' '+(m.barcode||'')).toLowerCase().includes(q)).slice(0,15);
+  el.innerHTML=r.length?r.map(m=>`<div class="card item" onclick="addToCart('${m.id}')"><div><div class="n">${esc(m.name)}${stockTag(m)}${expTag(m)}</div><div class="mu">${esc(m.company||'')} • Stock: ${m.qty}</div></div><b>${rs(m.retail)}</b></div>`).join(''):'<div class="card mu">Koi dawai nahi mili</div>';
+}
+function addToCart(id){
+  const m=S.meds.find(x=>x.id===id);if(!m)return;
+  let c=cart.find(x=>x.id===id);const cur=c?c.qty:0;
+  if(cur+1>m.qty){toast(`${m.name}: stock sirf ${m.qty} hai`);return}
+  if(expState(m)==='exp')toast('⚠️ Ye dawai expire ho chuki hai!');
+  c?c.qty++:cart.push({id,qty:1});
+  renderCart();if(tab==='sale'&&!(expState(m)==='exp'))toast('✔ '+m.name+' cart mein');
+}
+function chg(id,d){
+  const c=cart.find(x=>x.id===id),m=S.meds.find(x=>x.id===id);if(!c||!m)return;
+  const n=c.qty+d;if(n<=0)cart=cart.filter(x=>x.id!==id);else if(n>m.qty){toast('Stock kam hai');return}else c.qty=n;
+  renderCart();
+}
+function cartTotal(){return cart.reduce((s,c)=>{const m=S.meds.find(x=>x.id===c.id);return s+(m?m.retail*c.qty:0)},0)}
+function renderCart(){
+  const el=$('#cart');if(!el)return;
+  if(!cart.length){el.innerHTML='<div class="card mu">Cart khali hai. Dawai scan karein ya naam se dhoondein.</div>';return}
+  const disc=+($('#disc')?.value||0);
+  el.innerHTML=cart.map(c=>{const m=S.meds.find(x=>x.id===c.id);if(!m)return'';
+    return`<div class="card item"><div><div class="n">${esc(m.name)}</div><div class="mu">${rs(m.retail)} × ${c.qty} = ${rs(m.retail*c.qty)}</div></div>
+    <div class="qty"><button onclick="chg('${c.id}',-1)">−</button><b>${c.qty}</b><button onclick="chg('${c.id}',1)">+</button></div></div>`}).join('')+
+  `<div class="card"><div class="row"><span style="flex:1">Discount (Rs)</span><input id="disc" type="number" inputmode="decimal" style="width:110px" value="${disc||''}" oninput="updTotal()"></div>
+  <div class="kv" style="border:0;margin-top:6px"><span>Kul Raqam</span><span class="big" id="gt"></span></div></div>
+  <button class="btn full" style="padding:14px;font-size:17px" onclick="finishSale()">✅ Sale mukammal karein</button>
+  <button class="btn ghost full" onclick="cart=[];renderCart()">Cart khali karein</button>`;
+  updTotal();
+}
+function updTotal(){const t=cartTotal(),d=Math.min(+($('#disc')?.value||0),t);const g=$('#gt');if(g)g.textContent=rs(t-d)}
+function finishSale(){
+  if(!cart.length)return;
+  const total=cartTotal(),disc=Math.min(+($('#disc')?.value||0),total),final=total-disc;
+  const items=[];let cost=0;
+  for(const c of cart){const m=S.meds.find(x=>x.id===c.id);if(!m)continue;
+    if(c.qty>m.qty){toast(m.name+': stock kam hai');return}
+    items.push({id:m.id,name:m.name,qty:c.qty,price:m.retail,cost:m.cost||0});cost+=(m.cost||0)*c.qty}
+  items.forEach(i=>{S.meds.find(x=>x.id===i.id).qty-=i.qty});
+  S.sales.push({id:uid(),ts:Date.now(),items,total:final,discount:disc,profit:final-cost});
+  if(save()){cart=[];toast('Sale mukammal: '+rs(final));renderCart();renderResults()}
+}
+
+/* ---------- MEDICINE INFO / FORM ---------- */
+function showInfo(id){
+  const m=S.meds.find(x=>x.id===id);if(!m)return;
+  const pu=m.retail-(m.cost||0),mg=m.retail?Math.round(pu/m.retail*100):0;
+  modal(`<div class="big">${esc(m.name)}</div>
+  <div class="mu">${esc(m.company||'')} ${stockTag(m)} ${expTag(m)}</div>
+  <div class="kv"><span>Retail rate</span><b style="font-size:18px;color:var(--p)">${rs(m.retail)}</b></div>
+  <div class="kv"><span>Kharid rate</span><span>${rs(m.cost)}</span></div>
+  <div class="kv"><span>Munafa / unit</span><span>${rs(pu)} (${mg}%)</span></div>
+  <div class="kv"><span>Maujooda stock</span><b>${m.qty}</b></div>
+  ${m.formula?`<div class="kv"><span>Formula / Salt</span><span>${esc(m.formula)}</span></div>`:''}
+  ${m.form?`<div class="kv"><span>Qism</span><span>${esc(m.form)}</span></div>`:''}
+  ${m.expiry?`<div class="kv"><span>Expiry</span><span>${esc(m.expiry)}</span></div>`:''}
+  ${m.barcode?`<div class="kv"><span>Barcode</span><span>${esc(m.barcode)}</span></div>`:''}
+  ${m.notes?`<div class="kv"><span>Notes</span><span>${esc(m.notes)}</span></div>`:''}
+  <div class="row" style="margin-top:12px"><button class="btn" style="flex:1" onclick="closeModal();tab='sale';render();addToCart('${m.id}')">🛒 Cart mein</button>
+  <button class="btn ghost" style="flex:1" onclick="medForm('${m.id}')">✏️ Edit</button></div>
+  <button class="btn ghost full" onclick="closeModal()">Band</button>`);
+}
+function medForm(id,code){
+  const m=id?S.meds.find(x=>x.id===id):{barcode:code||''};
+  const v=k=>esc(m[k]??'');
+  modal(`<div class="big">${id?'Dawai edit':'Nayi dawai'}</div>
+  <label>Naam *</label><input id="f_name" value="${v('name')}">
+  <label>Barcode / QR code</label><div class="row"><input id="f_barcode" value="${v('barcode')}"><button class="btn" onclick="openScanner(c=>{$('#f_barcode').value=c})">📷</button></div>
+  <div class="grid"><div><label>Company</label><input id="f_company" value="${v('company')}"></div><div><label>Qism (tablet/syrup..)</label><input id="f_form" value="${v('form')}"></div></div>
+  <label>Formula / Salt</label><input id="f_formula" value="${v('formula')}">
+  <div class="grid"><div><label>Kharid rate (Rs)</label><input id="f_cost" type="number" inputmode="decimal" value="${v('cost')}"></div><div><label>Retail rate (Rs) *</label><input id="f_retail" type="number" inputmode="decimal" value="${v('retail')}"></div></div>
+  <div class="grid"><div><label>Stock (quantity)</label><input id="f_qty" type="number" inputmode="numeric" value="${v('qty')}"></div><div><label>Kam stock alert (is se kam)</label><input id="f_minq" type="number" inputmode="numeric" value="${m.minq??5}"></div></div>
+  <label>Expiry (mahina/saal)</label><input id="f_expiry" type="month" value="${v('expiry')}">
+  <label>Notes</label><textarea id="f_notes" rows="2">${v('notes')}</textarea>
+  <button class="btn full" style="padding:13px" onclick="saveMed('${id||''}')">💾 Save</button>
+  ${id?`<button class="btn red full" onclick="delMed('${id}')">🗑 Delete</button>`:''}
+  <button class="btn ghost full" onclick="closeModal()">Cancel</button>`);
+}
+function saveMed(id){
+  const g=k=>$('#f_'+k).value.trim();
+  const name=g('name'),retail=parseFloat(g('retail'));
+  if(!name){toast('Naam likhein');return}
+  if(isNaN(retail)){toast('Retail rate likhein');return}
+  const bc=g('barcode');
+  if(bc){const d=S.meds.find(x=>x.id!==id&&norm(x.barcode)===norm(bc));if(d){toast('Ye barcode "'+d.name+'" ke paas pehle se hai');return}}
+  const o={name,barcode:bc,company:g('company'),form:g('form'),formula:g('formula'),cost:parseFloat(g('cost'))||0,retail,qty:parseInt(g('qty'))||0,minq:parseInt(g('minq'))||5,expiry:g('expiry'),notes:g('notes')};
+  if(id)Object.assign(S.meds.find(x=>x.id===id),o);else S.meds.push({id:uid(),...o});
+  if(save()){closeModal();toast('Save ho gaya');render()}
+}
+function delMed(id){if(confirm('Ye dawai delete karein?')){S.meds=S.meds.filter(x=>x.id!==id);cart=cart.filter(c=>c.id!==id);save();closeModal();render()}}
+
+/* ---------- STOCK ---------- */
+function viewStock(){
+  $('#app').innerHTML=`
+  <div class="row"><input id="sq" placeholder="Dhoondein..." value="${esc(stockQ)}"><button class="btn" id="sscan">📷</button></div>
+  <button class="btn full" onclick="medForm(null)">➕ Nayi dawai add karein</button>
+  <div class="chips">${[['all','Sab'],['low','Kam stock'],['exp','Expiry'],['zero','Khatam']].map(([k,l])=>`<button class="chip ${stockFilter===k?'on':''}" onclick="stockFilter='${k}';viewStock()">${l}</button>`).join('')}</div>
+  <div id="slist"></div>`;
+  $('#sq').oninput=e=>{stockQ=e.target.value;renderStock()};
+  $('#sscan').onclick=()=>openScanner(code=>{const m=findByCode(code);m?showInfo(m.id):notFound(code)});
+  renderStock();
+}
+function renderStock(){
+  const q=stockQ.toLowerCase();
+  let r=S.meds.filter(m=>!q||(m.name+' '+(m.company||'')+' '+(m.formula||'')+' '+(m.barcode||'')).toLowerCase().includes(q));
+  if(stockFilter==='low')r=r.filter(m=>m.qty>0&&m.qty<=(+m.minq||5));
+  if(stockFilter==='zero')r=r.filter(m=>m.qty<=0);
+  if(stockFilter==='exp')r=r.filter(m=>expState(m));
+  r.sort((a,b)=>a.name.localeCompare(b.name));
+  const cost=S.meds.reduce((s,m)=>s+(m.cost||0)*Math.max(m.qty,0),0),ret=S.meds.reduce((s,m)=>s+m.retail*Math.max(m.qty,0),0);
+  $('#slist').innerHTML=`<div class="mu" style="margin:4px">Kul dawaiyan: ${S.meds.length} • Stock ki qeemat (kharid): ${rs(cost)} • (retail): ${rs(ret)}</div>`+
+  (r.length?r.map(m=>`<div class="card item" onclick="showInfo('${m.id}')"><div><div class="n">${esc(m.name)}${stockTag(m)}${expTag(m)}</div><div class="mu">${esc(m.company||'')} • Stock: ${m.qty}</div></div><b>${rs(m.retail)}</b></div>`).join(''):'<div class="card mu">Kuch nahi mila. "Nayi dawai add karein" dabayein.</div>');
+}
+
+/* ---------- REPORT ---------- */
+function viewReport(){
+  $('#app').innerHTML=`<div class="chips">${[['today','Aaj'],['month','Is Mahina'],['all','Sab']].map(([k,l])=>`<button class="chip ${period===k?'on':''}" onclick="period='${k}';viewReport()">${l}</button>`).join('')}</div><div id="rep"></div>`;
+  const now=Date.now(),tk=dkey(now),mk=mkey(now);
+  const sales=S.sales.filter(s=>period==='all'||(period==='today'?dkey(s.ts)===tk:mkey(s.ts)===mk));
+  const tot=sales.reduce((a,s)=>a+s.total,0),pr=sales.reduce((a,s)=>a+s.profit,0),
+        units=sales.reduce((a,s)=>a+s.items.reduce((x,i)=>x+i.qty,0),0);
+  const top={};sales.forEach(s=>s.items.forEach(i=>{top[i.name]=top[i.name]||{q:0,v:0};top[i.name].q+=i.qty;top[i.name].v+=i.qty*i.price}));
+  const topL=Object.entries(top).sort((a,b)=>b[1].q-a[1].q).slice(0,8);
+  const byDay={};S.sales.filter(s=>period!=='today'&&(period==='all'||mkey(s.ts)===mk)).forEach(s=>{const k=dkey(s.ts);byDay[k]=byDay[k]||{t:0,p:0,n:0};byDay[k].t+=s.total;byDay[k].p+=s.profit;byDay[k].n++});
+  const days=Object.entries(byDay).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,31);
+  const alerts=S.meds.filter(m=>(m.qty<=(+m.minq||5))||expState(m));
+  $('#rep').innerHTML=`
+  <div class="grid"><div class="stat"><b>${rs(tot)}</b><span>Kul Sale</span></div><div class="stat"><b style="color:var(--grn)">${rs(pr)}</b><span>Munafa</span></div>
+  <div class="stat"><b>${sales.length}</b><span>Bills</span></div><div class="stat"><b>${units}</b><span>Bikay units</span></div></div>
+  ${days.length?`<h3>📅 Din ke hisaab se</h3>`+days.map(([d,v])=>`<div class="card item"><div><div class="n">${d}</div><div class="mu">${v.n} bills • munafa ${rs(v.p)}</div></div><b>${rs(v.t)}</b></div>`).join(''):''}
+  ${topL.length?`<h3>🔥 Sab se zyada bikne wali</h3>`+topL.map(([n,v])=>`<div class="card item"><div class="n">${esc(n)}</div><div class="mu">${v.q} units • ${rs(v.v)}</div></div>`).join(''):''}
+  <h3>🧾 Bills</h3>
+  ${sales.length?sales.slice().reverse().slice(0,60).map(s=>{const d=new Date(s.ts);return`<div class="card"><div class="item"><div class="mu">${dkey(s.ts)} ${pad(d.getHours())}:${pad(d.getMinutes())}</div><b>${rs(s.total)}</b></div>
+    <div style="font-size:14px;margin:4px 0">${s.items.map(i=>esc(i.name)+' ×'+i.qty).join('، ')}</div>
+    <div class="item"><span class="mu">Munafa ${rs(s.profit)}${s.discount?' • Discount '+rs(s.discount):''}</span><button class="btn red sm" onclick="undoSale('${s.id}')">Wapsi</button></div></div>`}).join(''):'<div class="card mu">Is muddat mein koi sale nahi</div>'}
+  ${alerts.length?`<h3>⚠️ Alerts (kam stock / expiry)</h3>`+alerts.map(m=>`<div class="card item" onclick="showInfo('${m.id}')"><div class="n">${esc(m.name)}</div><div>${stockTag(m)}${expTag(m)} <span class="mu">${m.qty}</span></div></div>`).join(''):''}`;
+}
+function undoSale(id){
+  const s=S.sales.find(x=>x.id===id);if(!s||!confirm('Ye bill wapis karein? Stock wapis add hoga.'))return;
+  s.items.forEach(i=>{const m=S.meds.find(x=>x.id===i.id);if(m)m.qty+=i.qty});
+  S.sales=S.sales.filter(x=>x.id!==id);save();viewReport();
+}
+
+/* ---------- BACKUP ---------- */
+function viewMore(){
+  $('#app').innerHTML=`
+  <div class="card"><b>💾 Backup lein</b><p class="mu">Data sirf is phone ke browser mein hai. Browser data clear karne se ud sakta hai, is liye hafte mein ek baar backup lein.</p>
+  <button class="btn full" onclick="exportJson()">Backup file download karein</button>
+  <button class="btn ghost full" onclick="$('#imp').click()">Backup file wapis load karein</button>
+  <input type="file" id="imp" accept=".json,application/json" hidden></div>
+  <div class="card"><b>📄 Excel (CSV)</b><p class="mu">Dawaiyon ki list ya sales Excel mein kholne ke liye.</p>
+  <button class="btn ghost full" onclick="exportCsv('stock')">Dawaiyon ki list (CSV)</button>
+  <button class="btn ghost full" onclick="exportCsv('sales')">Sales (CSV)</button></div>
+  <div class="card"><b>🗑 Sara data delete</b><button class="btn red full" onclick="wipe()">Sab kuch mita dein</button></div>`;
+  $('#imp').onchange=e=>{
+    const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.meds)||!Array.isArray(d.sales))throw 0;
+      if(confirm('Maujooda data replace ho jayega. Jari rakhein?')){S={meds:d.meds,sales:d.sales};save();toast('Backup load ho gaya');render()}}
+      catch(x){toast('File durust nahi hai')}};r.readAsText(f);
+  };
+}
+function dl(name,text,type){if(window.Android&&Android.saveFile){Android.saveFile(name,text,type);return}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function exportJson(){dl('pharmacy-backup-'+dkey(Date.now())+'.json',JSON.stringify(S),'application/json')}
+function exportCsv(k){
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';let rows;
+  if(k==='stock'){rows=[['Naam','Barcode','Company','Formula','Kharid','Retail','Stock','Expiry']].concat(S.meds.map(m=>[m.name,m.barcode,m.company,m.formula,m.cost,m.retail,m.qty,m.expiry]))}
+  else{rows=[['Tareekh','Waqt','Items','Discount','Kul','Munafa']].concat(S.sales.map(s=>{const d=new Date(s.ts);return[dkey(s.ts),pad(d.getHours())+':'+pad(d.getMinutes()),s.items.map(i=>i.name+' x'+i.qty).join('; '),s.discount,s.total,s.profit]}))}
+  dl('pharmacy-'+k+'.csv','\ufeff'+rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
+}
+function wipe(){if(confirm('Pura data delete ho jayega!')&&confirm('Pakka? Pehle backup le lein.')){S={meds:[],sales:[]};cart=[];save();render()}}
+
+render();
+</script>
+</body>
+</html>
